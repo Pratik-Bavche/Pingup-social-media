@@ -9,6 +9,7 @@ await connectDB();
 
 app.use(express.json());
 app.use(cors());
+//this is server file
 
 app.get('/',(req,res)=>{
     res.send("Server is running")
