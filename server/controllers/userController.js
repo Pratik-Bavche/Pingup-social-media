@@ -42,6 +42,9 @@ export const updateUserData=async (req,res) => {
             location,
             full_name
         }
+
+        const profile=req.files.profile && req.files.profile[0]
+        const cover=req.files.profile && req.files.profile[0]
     }
     catch(error){
         console.log(error);
