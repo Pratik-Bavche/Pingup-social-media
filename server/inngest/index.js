@@ -1,6 +1,6 @@
 import { Inngest } from "inngest";
 import User from "../models/User.js";
-import Connection from "../models/connection.js";
+import Connection from "../models/Connection.js";
 import sendMail from "../configs/nodeMailer.js";
 
 // Create the Inngest client
