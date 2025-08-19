@@ -11,7 +11,7 @@ const PostCard = ({ post }) => {
     '<span class="text-indigo-600">$1</span>'
   );
 
-  const [likes,setLikes]=useState(post.likes_count);
+  const [likes,setLikes]=useState(post.likes || []);
   const currentUser=useSelector((state)=>state.user.value)
 
   const handleLike=async () => {
@@ -50,23 +50,25 @@ const PostCard = ({ post }) => {
 
       {/* imgaes */}
 
-      <div className="grid grid-cols-2 gap-2">
-        {post.image_urls.map((img, index) => (
-          <img
-            src={img}
-            key={index}
-            className={`w-full object-cover rounded-lg ${
-              post.image_urls.length === 1 ? "col-span-2 h-auto" : "h-48"
-            }`}
-          />
-        ))}
-      </div>
+      {post.image_urls && post.image_urls.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {post.image_urls.map((img, index) => (
+            <img
+              src={img}
+              key={index}
+              className={`w-full object-cover rounded-lg ${
+                post.image_urls.length === 1 ? "col-span-2 h-auto" : "h-48"
+              }`}
+            />
+          ))}
+        </div>
+      )}
 
         {/* Actions */}
 
         <div className="flex items-center gap-4 to-gray-600 text-sm pt-2 border-t border-gray-300">
             <div className="flex items-center gap-1">
-                <Heart className={`w-4 h-4 cursor-pointer ${likes.includes(currentUser._id) && 'text-red-500 fill-red-500'}`} onClick={handleLike}/>
+                <Heart className={`w-4 h-4 cursor-pointer ${likes.includes(currentUser?._id) && 'text-red-500 fill-red-500'}`} onClick={handleLike}/>
                 <span>{likes.length}</span>
             </div>
 
