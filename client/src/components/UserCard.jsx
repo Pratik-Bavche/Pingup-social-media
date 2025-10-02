@@ -1,72 +1,173 @@
-import React from 'react';
-import { dummyUserData } from '../assets/assets';
-import { MapPin,MessageCircle,UserPlus,Users,Plus } from 'lucide-react';
-import {useSelector} from 'react-redux'
+import React, { useState } from "react";
+import { MapPin, MessageCircle, UserPlus, Users, Plus, Lock, Globe } from "lucide-react";
+import { useSelector } from "react-redux";
+import { useAuth } from "@clerk/clerk-react";
+import { useNavigate } from "react-router-dom";
+import api from "../api/axios";
+import toast from "react-hot-toast";
 
-const UserCard = ({user}) => {
+const UserCard = ({ user }) => {
+  const [loading, setLoading] = useState(false);
+  const currentUser = useSelector((state) => state.user.value);
+  const { getToken } = useAuth();
+  const navigate = useNavigate();
 
-    const currentUser=useSelector((state)=>state.user.value)
+  // Check if current user is following this user
+  const isFollowing = currentUser?.following?.includes(user._id);
+  
+  // Check if current user is connected to this user
+  const isConnected = currentUser?.connections?.includes(user._id);
 
-    const handleFollow= async () => {
-        
+  const handleFollow = async () => {
+    if (!currentUser) return;
+
+    try {
+      setLoading(true);
+      const { data } = await api.post(
+        "/api/user/follow",
+        { id: user._id },
+        {
+          headers: { Authorization: `Bearer ${await getToken()}` },
+        }
+      );
+
+      if (data.success) {
+        toast.success(data.message);
+        // If immediate follow, refresh the page or update state
+        if (data.immediate) {
+          window.location.reload(); // Simple refresh for now
+        }
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.error("Error following user:", error);
+      toast.error("Failed to follow user");
+    } finally {
+      setLoading(false);
     }
+  };
 
-    const handleConnectionRequest=async () => {
-        
+  const handleConnectionRequest = async () => {
+    if (!currentUser) return;
+
+    try {
+      setLoading(true);
+      const { data } = await api.post(
+        "/api/user/send-connection-request",
+        { id: user._id },
+        {
+          headers: { Authorization: `Bearer ${await getToken()}` },
+        }
+      );
+
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      console.error("Error sending connection request:", error);
+      toast.error("Failed to send connection request");
+    } finally {
+      setLoading(false);
     }
+  };
 
+  const handleMessage = () => {
+    navigate(`/messages/${user._id}`);
+  };
 
   return (
-    <div key={user._id} className='p-4 pt-6 flex flex-col justify-between w-72 shadow border border-gray-200 rounded-md'>
-      <div className='text-center'>
-        <img src={user.profile_picture} className='rounded-full w-16 shadow-md mx-auto' />
-            <p className='mt-4 font-semibold'>{user.full_name}</p>
-            {
-                user.username && <p className='text-gray-500 font-light'>@{user.username}</p>
-            }
-            {
-                user.bio && <p className='text-gray-600 mt-2 text-center text-sm px-4'>{user.bio}</p>
-            }
+    <div
+      key={user._id}
+      className="p-4 pt-6 flex flex-col justify-between w-72 shadow border border-gray-200 rounded-md"
+    >
+      <div className="text-center">
+        <img
+          src={user.profile_picture}
+          className="rounded-full w-16 shadow-md mx-auto"
+          alt={user.full_name}
+        />
+        <p className="mt-4 font-semibold">{user.full_name}</p>
+        {user.username && (
+          <p className="text-gray-500 font-light">@{user.username}</p>
+        )}
+        
+        {/* Account Type Badge */}
+        <div className="flex items-center justify-center gap-1 mt-2">
+          {user.account_type === 'private' ? (
+            <Lock className="w-4 h-4 text-red-500" />
+          ) : (
+            <Globe className="w-4 h-4 text-green-500" />
+          )}
+          <span className={`text-xs font-medium ${
+            user.account_type === 'private' ? 'text-red-600' : 'text-green-600'
+          }`}>
+            {user.account_type === 'private' ? 'Private Account' : 'Public Account'}
+          </span>
+        </div>
+        
+        {user.bio && (
+          <p className="text-gray-600 mt-2 text-center text-sm px-4">
+            {user.bio}
+          </p>
+        )}
       </div>
 
+      <div className="flex items-center justify-center gap-2 mt-4 text-xs text-gray-600">
+        {/* Location */}
+        {user.location && (
+          <div className="flex items-center gap-1 border border-gray-300 rounded-full px-3 py-1">
+            <MapPin className="w-4 h-4" />
+            <span>{user.location}</span>
+          </div>
+        )}
 
-<div className='flex items-center justify-center gap-2 mt-4 text-xs text-gray-600'>
-  {/* Location */}
-  <div className='flex items-center gap-1 border border-gray-300 rounded-full px-3 py-1'>
-    <MapPin className='w-4 h-4' />
-    <span>{user.location}</span>
-  </div>
+        {/* Followers */}
+        <div className="flex items-center gap-1 border border-gray-300 rounded-full px-3 py-1">
+          <Users className="w-4 h-4" />
+          <span>{user.followers?.length || 0} Followers</span>
+        </div>
+      </div>
 
-  {/* Followers */}
-  <div className='flex items-center gap-1 border border-gray-300 rounded-full px-3 py-1'>
-    <Users className='w-4 h-4' />
-    <span>{user.followers.length} Followers</span>
-  </div>
-</div>
+      <div className="flex mt-4 gap-2">
+        {/* Follow button */}
+        {!isFollowing ? (
+          <button
+            onClick={handleFollow}
+            disabled={loading}
+            className="w-full py-2 rounded-md flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active:scale-95 transition text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <UserPlus className="w-4 h-4" />
+            {loading ? "Loading..." : `Follow${user.account_type === 'private' ? ' Request' : ''}`}
+          </button>
+        ) : (
+          <button
+            onClick={handleFollow}
+            disabled={loading}
+            className="w-full py-2 rounded-md flex justify-center items-center gap-2 bg-gray-500 hover:bg-gray-600 active:scale-95 transition text-white cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <UserPlus className="w-4 h-4" />
+            {loading ? "Loading..." : "Following"}
+          </button>
+        )}
 
-<div className='flex mt-4 gap-2'>
-        {/* follow button */}
-
-        <button onClick={handleFollow} disabled={currentUser?.following.includes(user._id)}className='w-full py-2 rounded-md flex justify-center items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 active: scale-95 transition
-text-white cursor-pointer'>
-            <UserPlus className='w-4 h-4'/> {currentUser?.following.includes(user._id)?'Following':'Follow'}
+        {/* Connect/Message button */}
+        <button
+          onClick={isConnected ? handleMessage : handleConnectionRequest}
+          disabled={loading}
+          className="flex items-center justify-center w-16 border text-slate-500 group rounded-md cursor-pointer active:scale-95 transition disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isConnected ? (
+            <MessageCircle className="w-5 h-5 group-hover:scale-105 transition" />
+          ) : (
+            <Plus className="w-5 h-5 group-hover:scale-105 transition" />
+          )}
         </button>
-
-{/* connect req button */}
-
-<button onClick={handleConnectionRequest}className='flex items-center justify-center w-16 border text-slate-500 group rounded-md cursor-pointer active:scale-95 transition'>
-{
-currentUser?.connections.includes(user._id) ?<MessageCircle className='w-5 h-5 group-hover:scale-105
-transition'/>
-:
-<Plus className='w-5 h-5 group-hover:scale-105 transition'/>
-}
-</button>
-
-</div>
-
+      </div>
     </div>
   );
-}
+};
 
 export default UserCard;

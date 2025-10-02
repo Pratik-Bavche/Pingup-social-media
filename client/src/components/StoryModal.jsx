@@ -2,6 +2,8 @@ import { ArrowLeft, Sparkle, TextIcon, Upload } from "lucide-react";
 import React from "react";
 import { useState } from "react";
 import toast from "react-hot-toast";
+import { useAuth } from "@clerk/clerk-react";
+import api from "../api/axios";
 
 const StoryModal = ({ setShowModal, fetchStories }) => {
   const bgColors = [
@@ -18,6 +20,8 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
   const [text, setText] = useState("");
   const [media, setMedia] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const { getToken } = useAuth();
 
   const handleMediaUpload = (e) => {
     const file = e.target.files?.[0];
@@ -27,7 +31,58 @@ const StoryModal = ({ setShowModal, fetchStories }) => {
     }
   };
 
-  const handleCreateStory = async () => {};
+  const handleCreateStory = async () => {
+    if (mode === "text" && !text.trim()) {
+      toast.error("Please add some text to your story");
+      return;
+    }
+
+    if (mode === "media" && !media) {
+      toast.error("Please select a media file");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const formData = new FormData();
+
+      if (mode === "text") {
+        formData.append("content", text);
+        formData.append("media_type", "text");
+      } else {
+        formData.append("media", media);
+        formData.append(
+          "media_type",
+          media.type.startsWith("image") ? "image" : "video"
+        );
+        if (text.trim()) {
+          formData.append("content", text);
+        }
+      }
+
+      formData.append("background_color", background);
+
+      const { data } = await api.post("/api/story/add", formData, {
+        headers: {
+          Authorization: `Bearer ${await getToken()}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
+      if (data.success) {
+        toast.success("Story created successfully!");
+        setShowModal(false);
+        fetchStories(); // Refresh stories
+      } else {
+        toast.error(data.message || "Failed to create story");
+      }
+    } catch (error) {
+      console.error("Error creating story:", error);
+      toast.error(error.message || "Failed to create story");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div
@@ -89,7 +144,7 @@ p-6 text-lg resize-none focus:outline-none"
             onClick={() => {
               setMode("text");
               setMedia(null);
-              previewUrl(null);
+              setPreviewUrl(null);
             }}
             className={`flex-1 flex items-center justify-center gap-2 p-2 rounded cursor-pointer ${
               mode === "text" ? "bg-white text-black" : "bg-zinc-800"
@@ -116,17 +171,12 @@ p-6 text-lg resize-none focus:outline-none"
         </div>
 
         <button
-          onClick={() =>
-            toast.promise(handleCreateStory(), {
-              loading: "Saving...",
-              success: <p>Story Added</p>,
-              error: (e) => <p>{e.message}</p>,
-            })
-          }
+          onClick={handleCreateStory}
+          disabled={loading}
           className="flex items-center justify-center gap-2 text-white py-3 mt-4 w-full rounded bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700
- active: scale-95 transition cursor-pointer"
+ active:scale-95 transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Sparkle size={18} /> Create Story
+          <Sparkle size={18} /> {loading ? "Creating..." : "Create Story"}
         </button>
       </div>
     </div>

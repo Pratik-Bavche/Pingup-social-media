@@ -1,23 +1,25 @@
 import express from 'express';
 import { protect } from '../middleware/auth.js';
 import {
-  acceptConnectionRequest,
-  discoverUsers,
-  followUser,
-  getUserConnections,
-  getUserData,
-  getUserProfiles,
-  sendConnectionRequest,
-  unfollowUser,
-  updateUserData
+    getUserData,
+    updateUserData,
+    discoverUsers,
+    followUser,
+    unfollowUser,
+    sendConnectionRequest,
+    getUserConnections,
+    acceptConnectionRequest,
+    getUserProfiles,
+    acceptFollowRequest,
+    rejectFollowRequest,
+    updateAccountType,
+    getUserSuggestions
 } from '../controllers/userController.js';
 import { upload } from '../configs/multer.js';
-import { getUserRecentMessages } from '../controllers/messageController.js';
 
 const userRouter = express.Router();
 
 userRouter.get('/data', protect, getUserData);
-
 userRouter.post(
   '/update',
   protect,
@@ -27,14 +29,16 @@ userRouter.post(
   ]),
   updateUserData
 );
-
+userRouter.post('/update-account-type', protect, updateAccountType);
 userRouter.post('/discover', protect, discoverUsers);
 userRouter.post('/follow', protect, followUser);
 userRouter.post('/unfollow', protect, unfollowUser);
-userRouter.post('/connect', protect, sendConnectionRequest);
-userRouter.post('/accept', protect, acceptConnectionRequest);
+userRouter.post('/send-connection-request', protect, sendConnectionRequest);
+userRouter.post('/accept-connection', protect, acceptConnectionRequest);
+userRouter.post('/accept-follow-request', protect, acceptFollowRequest);
+userRouter.post('/reject-follow-request', protect, rejectFollowRequest);
 userRouter.get('/connections', protect, getUserConnections);
-userRouter.post('/profiles',getUserProfiles)
-userRouter.get('/recent-messages',protect,getUserRecentMessages)
+userRouter.post('/profiles', protect, getUserProfiles);
+userRouter.get('/suggestions', protect, getUserSuggestions); // Added suggestions route
 
 export default userRouter;

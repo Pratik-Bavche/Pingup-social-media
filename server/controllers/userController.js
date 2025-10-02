@@ -125,56 +125,85 @@ export const discoverUsers=async (req,res) => {
 
 
 //follow users
+export const followUser = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { id } = req.body;
 
-export const followUser=async (req,res) => {
-    try{
-        const {userId}=req.auth()
-        const {id}=req.body;
-
-        const user=await User.findById(userId);
-
-        if(user.following.includes(id)){
-                return res.json({success:false,message:'You are already following this user'})
+        if (userId === id) {
+            return res.json({ success: false, message: 'You cannot follow yourself' });
         }
 
-        user.following().push(id);
-        await user.save();
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
 
-        const toUser=await User.findById(id)
-        toUser.followers.push(userId);
-        await toUser.save();
+        const targetUser = await User.findById(id);
+        if (!targetUser) {
+            return res.json({ success: false, message: 'Target user not found' });
+        }
 
-        res.json({success:true,message:'Now you are following this user'})
+        // Check if already following
+        if (user.following.includes(id)) {
+            return res.json({ success: false, message: 'You are already following this user' });
+        }
 
-    }
-    catch(error){
+        // Check if already in pending followers
+        if (targetUser.pending_followers.includes(userId)) {
+            return res.json({ success: false, message: 'Follow request already pending' });
+        }
+
+        if (targetUser.account_type === 'public') {
+            // Public account - follow immediately
+            user.following.push(id);
+            targetUser.followers.push(userId);
+            
+            await user.save();
+            await targetUser.save();
+
+            res.json({ success: true, message: 'Now you are following this user', immediate: true });
+        } else {
+            // Private account - send follow request
+            targetUser.pending_followers.push(userId);
+            await targetUser.save();
+
+            res.json({ success: true, message: 'Follow request sent. Waiting for approval.', immediate: false });
+        }
+
+    } catch (error) {
         console.log(error);
-        res.json({success:false,message:error.message})
+        res.json({ success: false, message: error.message });
     }
 }
 
-
 //unfollow user
+export const unfollowUser = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { id } = req.body;
 
-export const unfollowUser=async (req,res) => {
-    try{
-        const {userId}=req.auth()
-        const {id}=req.body;
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
 
-        const user=await User.findById(userId);
-        user.following=user.following.filter(user=>user !== id);
+        // Remove from following
+        user.following = user.following.filter(followingId => followingId !== id);
         await user.save();
 
-        const toUser=await User.findById(id);
-        toUser.followers=toUser.followers.filter(user=>user !== userId);
-        await toUser.save();
+        // Remove from target user's followers
+        const toUser = await User.findById(id);
+        if (toUser) {
+            toUser.followers = toUser.followers.filter(followerId => followerId !== userId);
+            await toUser.save();
+        }
 
-        res.json({success:true,message:'You are no longer following this user'})
+        res.json({ success: true, message: 'You are no longer following this user' });
 
-    }
-    catch(error){
+    } catch (error) {
         console.log(error);
-        res.json({success:false,message:error.message})
+        res.json({ success: false, message: error.message });
     }
 }
 
@@ -233,24 +262,60 @@ export const sendConnectionRequest=async (req,res) => {
 
 
 //user connections
+export const getUserConnections = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const user = await User.findById(userId);
 
-export const getUserConnections=async (req,res) => {
-    try{
-        const{userId}=req.auth();
-        const user=await User.findById(userId).populate('connections followers following')
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
 
-        const connections=user.connections;
-        const followers=user.followers;
-        const following=user.following;
+        const connections = user.connections || [];
+        const followers = user.followers || [];
+        const following = user.following || [];
+        const pendingFollowers = user.pending_followers || []; // Added pending followers
 
-        const pendingConnections=(await Connection.find({to_user_id:userId,status:'pending'}).populate('from_user_id')).map(connection=>connection.from_user_id)
+        // Get pending connections without populate to avoid casting issues
+        const pendingConnectionsData = await Connection.find({ to_user_id: userId, status: 'pending' });
+        
+        // Manually populate user data to avoid casting issues
+        const pendingConnections = await Promise.all(
+            pendingConnectionsData.map(async (connection) => {
+                try {
+                    const userData = await User.findById(connection.from_user_id);
+                    return userData || { _id: connection.from_user_id, full_name: 'Unknown User', username: 'unknown' };
+                } catch (error) {
+                    console.error('Error populating user for pending connection:', error);
+                    return { _id: connection.from_user_id, full_name: 'Unknown User', username: 'unknown' };
+                }
+            })
+        );
 
-        res.json({success:true,connections,followers,following,pendingConnections})
-    }
-    catch(error)
-    {
+        // Populate pending followers data
+        const populatedPendingFollowers = await Promise.all(
+            pendingFollowers.map(async (followerId) => {
+                try {
+                    const userData = await User.findById(followerId);
+                    return userData || { _id: followerId, full_name: 'Unknown User', username: 'unknown' };
+                } catch (error) {
+                    console.error('Error populating pending follower:', error);
+                    return { _id: followerId, full_name: 'Unknown User', username: 'unknown' };
+                }
+            })
+        );
+
+        res.json({ 
+            success: true, 
+            connections, 
+            followers, 
+            following, 
+            pendingConnections,
+            pendingFollowers: populatedPendingFollowers // Added populated pending followers
+        });
+    } catch (error) {
         console.log(error);
-        res.json({success:false,message:error.message})
+        res.json({ success: false, message: error.message });
     }
 } 
 
@@ -291,19 +356,155 @@ export const acceptConnectionRequest=async (req,res) => {
 
 
 //Get user profiles
-export const getUserProfiles=async (req,res) => {
+export const getUserProfiles = async (req, res) => {
     try {
-        const {profileId}=req.body;
-        const profile=await User.findById(profileId);
-        if(!profile)
-        {
-            return res.json({success:false,message:"Profile not found"});
+        const { profileId } = req.body;
+        const profile = await User.findById(profileId);
+        if (!profile) {
+            return res.json({ success: false, message: "Profile not found" });
         }
-        const posts=await Post.find({user:profileId}).populate('user')
+        
+        // Get posts without populate to avoid casting issues
+        const posts = await Post.find({ user: profileId }).sort({ createdAt: -1 });
+        
+        // Manually add user data to posts
+        const postsWithUser = posts.map(post => ({
+            ...post.toObject(),
+            user: profile
+        }));
 
-        res.json({success:true,profile,posts})
+        res.json({ success: true, profile, posts: postsWithUser });
     } catch (error) {
         console.log(error);
-        res.json({success:false,message:error.message})
+        res.json({ success: false, message: error.message });
+    }
+}
+
+//accept follow request (for private accounts)
+export const acceptFollowRequest = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { followerId } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        // Check if the follower is in pending_followers
+        if (!user.pending_followers.includes(followerId)) {
+            return res.json({ success: false, message: 'No pending follow request from this user' });
+        }
+
+        // Remove from pending followers
+        user.pending_followers = user.pending_followers.filter(id => id !== followerId);
+        
+        // Add to followers
+        user.followers.push(followerId);
+        
+        // Add to connections (mutual connection)
+        if (!user.connections.includes(followerId)) {
+            user.connections.push(followerId);
+        }
+
+        await user.save();
+
+        // Update the follower's following list and connections
+        const follower = await User.findById(followerId);
+        if (follower) {
+            follower.following.push(userId);
+            if (!follower.connections.includes(userId)) {
+                follower.connections.push(userId);
+            }
+            await follower.save();
+        }
+
+        res.json({ success: true, message: 'Follow request accepted successfully' });
+
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+}
+
+//reject follow request (for private accounts)
+export const rejectFollowRequest = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { followerId } = req.body;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        // Remove from pending followers
+        user.pending_followers = user.pending_followers.filter(id => id !== followerId);
+        await user.save();
+
+        res.json({ success: true, message: 'Follow request rejected successfully' });
+
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+}
+
+//update account type (public/private)
+export const updateAccountType = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const { account_type } = req.body;
+
+        if (!['public', 'private'].includes(account_type)) {
+            return res.json({ success: false, message: 'Invalid account type. Must be "public" or "private"' });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        user.account_type = account_type;
+        await user.save();
+
+        res.json({ success: true, message: `Account changed to ${account_type}`, user });
+
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
+    }
+}
+
+//get user suggestions for feed sidebar
+export const getUserSuggestions = async (req, res) => {
+    try {
+        const { userId } = req.auth();
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.json({ success: false, message: 'User not found' });
+        }
+
+        // Get users that the current user is not following and not connected to
+        const excludedUserIds = [
+            userId,
+            ...(user.following || []),
+            ...(user.connections || []),
+            ...(user.pending_followers || [])
+        ];
+
+        // Find users to suggest (excluding current user's network)
+        const suggestions = await User.find({
+            _id: { $nin: excludedUserIds }
+        })
+        .limit(5) // Limit to 5 suggestions
+        .select('_id full_name username profile_picture bio account_type followers');
+
+        res.json({ success: true, suggestions });
+
+    } catch (error) {
+        console.log(error);
+        res.json({ success: false, message: error.message });
     }
 }
