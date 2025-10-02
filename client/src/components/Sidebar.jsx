@@ -1,7 +1,7 @@
 import React from "react";
 import { assets, dummyUserData } from "../assets/assets";
 import { Link, useNavigate } from "react-router-dom";
-import MenuItems from "./MenuItems";
+import MenuItems from "./MenuItems.jsx";
 import { CirclePlus, LogOut } from "lucide-react";
 import { UserButton, useClerk } from "@clerk/clerk-react";
 import { useSelector } from "react-redux";
