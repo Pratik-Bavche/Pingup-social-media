@@ -1,4 +1,5 @@
 # 🚀 Project Launch: PingUp 📱 – Modern Social Media Platform
+
 I'm excited to announce the completion of my full-stack project PingUp, a comprehensive social media platform designed to connect people through posts, stories, messaging, and meaningful interactions.
 🎯 The Vision
 PingUp reimagines social media with a focus on authentic connections, real-time engagement, and seamless user experience. From sharing moments to building communities, it's your digital space to express, connect, and discover.
